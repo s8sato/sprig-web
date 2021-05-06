@@ -1,7 +1,9 @@
-module Main exposing (..)
+port module Main exposing (..)
 
 import Browser
 import Html exposing (..)
+import Json.Decode as Decode
+import Json.Encode as Encode
 import Page as P
 import Page.App.App as App
 import Page.Invite as Invite
@@ -20,6 +22,13 @@ main =
         , update = update
         , subscriptions = subscriptions
         }
+
+
+
+-- PORTS
+
+
+port newTab : Decode.Value -> Cmd msg
 
 
 
@@ -107,7 +116,12 @@ update msg mdl =
                                     Login.update msg_ mdl_ |> U.map LoginMdl LoginMsg
 
                                 ( AppMsg msg_, AppMdl mdl_ ) ->
-                                    App.update msg_ mdl_ |> U.map AppMdl AppMsg
+                                    case msg_ of
+                                        App.NewTab url ->
+                                            ( mdl.mdl0, url |> Encode.string |> newTab )
+
+                                        _ ->
+                                            App.update msg_ mdl_ |> U.map AppMdl AppMsg
 
                                 _ ->
                                     ( mdl.mdl0, Cmd.none )

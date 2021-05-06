@@ -1,0 +1,19 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Main</title>
+  <link rel="stylesheet" type="text/css" href="css/style.css">
+  <script src="main.js"></script>
+</head>
+<body>
+  <div id="elm"></div>
+</body>
+<script>
+var app = Elm.Main.init({
+  node: document.getElementById('elm')
+});
+// open url in new tab
+app.ports.newTab.subscribe( url => window.open(url, '_blank'));
+</script>
+</html>

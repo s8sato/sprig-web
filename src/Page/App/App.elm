@@ -115,6 +115,7 @@ type Msg
     | Tick Posix
     | FromU FromU
     | FromS FromS
+    | NewTab String
 
 
 type FromU
@@ -195,20 +196,19 @@ update msg mdl =
                                             ( { mdl | cursor = 0 < mdl.cursor |> BX.ifElse (mdl.cursor - 1) mdl.cursor }, follow Up mdl )
 
                                         'x' ->
-                                            ( mdl, (\item -> Select item.id |> U.cmd FromU) |> forTheItem mdl )
+                                            ( mdl, forTheItem mdl (\item -> Select item.id |> U.cmd FromU) )
 
-                                        -- TODO port https://stackoverflow.com/questions/65316506/elm-open-url-in-a-new-tab
                                         'u' ->
-                                            ( mdl, Cmd.none )
+                                            ( mdl, forTheItem mdl (\item -> item.link |> MX.unwrap NoOp (\url -> NewTab url) |> U.cmd identity) )
 
                                         'i' ->
                                             ( { mdl | selected = mdl.items |> List.filter (\item -> LX.notMember item.id mdl.selected) |> List.map .id }, Cmd.none )
 
                                         's' ->
-                                            ( mdl, (\item -> Star item.id |> request) |> forTheItem mdl )
+                                            ( mdl, forTheItem mdl (\item -> Star item.id |> request) )
 
                                         'f' ->
-                                            ( mdl, (\item -> Focus item |> request) |> forTheItem mdl )
+                                            ( mdl, forTheItem mdl (\item -> Focus item |> request) )
 
                                         'e' ->
                                             ( mdl, Exec { tids = mdl.selected, revert = mdl.keyMod.shift } |> request )
@@ -252,7 +252,7 @@ update msg mdl =
                                 Enter ->
                                     ( mdl, mdl.keyMod.ctrl |> BX.ifElse (Text mdl.input |> request) Cmd.none )
 
-                                -- TODO get selectionStart of textarea
+                                -- TODOX get selectionStart of textarea
                                 Tab ->
                                     ( mdl, Cmd.none )
 
@@ -320,6 +320,7 @@ update msg mdl =
                         , msgFix = False
                         , items = res
                         , selected = []
+                        , cursor = 0
                         , view = view_
                         , timescale = mdl.user.timescale
                         , isCurrent = True
@@ -416,11 +417,12 @@ update msg mdl =
                             ( { mdl
                                 | msg =
                                     [ (r.items |> List.length |> singularize "hits") ++ ":"
-                                    , -- TODO actual search condition
+                                    , -- TODOX actual search condition
                                       "actual search condition"
                                     ]
                                         |> String.join " "
                                 , items = r.items
+                                , cursor = 0
                                 , view = Search
                               }
                             , Cmd.none
@@ -467,6 +469,7 @@ update msg mdl =
                             ]
                                 |> String.join " "
                         , msgFix = True
+                        , cursor = 0
                       }
                     , Home Nothing |> request
                     )
@@ -479,7 +482,7 @@ update msg mdl =
                             , "Succ." ++ U.len res.succ
                             ]
                                 |> String.join " "
-                        , items = res.pred ++ ({ item | schedule = Nothing, priority = Nothing } :: res.succ) -- TODO not so beautiful
+                        , items = res.pred ++ ({ item | schedule = Nothing, priority = Nothing } :: res.succ)
                         , selected = []
                         , cursor = List.length res.pred
                         , view = Focus_
@@ -509,6 +512,9 @@ update msg mdl =
 
                 Starred _ (Err e) ->
                     handle mdl e
+
+        NewTab _ ->
+            ( mdl, Cmd.none )
 
 
 handle : Mdl -> U.HttpError -> ( Mdl, Cmd Msg )
