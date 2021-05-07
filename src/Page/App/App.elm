@@ -130,7 +130,7 @@ type FromU
     | KeyDown Key
     | KeyUp Key
     | Select Tid
-    | GetCaret
+    | Indent
 
 
 type FromS
@@ -140,7 +140,7 @@ type FromS
     | Execed Bool (U.HttpResult ResExec)
     | Focused Item (U.HttpResult ResFocus)
     | Starred Tid U.HttpResultAny
-    | GotCaret Int
+    | AtCaret Int
 
 
 update : Msg -> Mdl -> ( Mdl, Cmd Msg )
@@ -302,8 +302,14 @@ update msg mdl =
                 Select tid ->
                     ( { mdl | selected = mdl.selected |> (\l -> List.member tid l |> BX.ifElse (LX.remove tid l) (tid :: l)) }, Cmd.none )
 
-                GetCaret ->
-                    ( mdl, Cmd.none )
+                Indent ->
+                    let
+                        caret =
+                            mdl.caret - 1
+                    in
+                    ( { mdl | input = mdl.input |> SX.insertAt "    " caret }
+                    , SetCaret caret |> U.cmd identity
+                    )
 
         FromS fromS ->
             case fromS of
@@ -531,10 +537,8 @@ update msg mdl =
                 Starred _ (Err e) ->
                     handle mdl e
 
-                GotCaret i ->
-                    ( { mdl | input = mdl.input |> SX.insertAt "    " i }
-                    , SetCaret i |> U.cmd identity
-                    )
+                AtCaret i ->
+                    ( { mdl | caret = i }, Cmd.none )
 
 
 handle : Mdl -> U.HttpError -> ( Mdl, Cmd Msg )
@@ -710,7 +714,7 @@ view mdl =
                     , onBlur InputBlur
                     , placeholder Placeholder.placeholder
                     , spellcheck True
-                    , preventDefaultOn "keydown" (decKey |> Decode.map (\key -> ( key == NonChar Tab |> BX.ifElse GetCaret NoOp_, key == NonChar Tab )))
+                    , preventDefaultOn "keydown" (decKey |> Decode.map (\key -> ( key == NonChar Tab |> BX.ifElse Indent NoOp_, key == NonChar Tab )))
                     ]
                     []
                 ]

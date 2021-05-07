@@ -31,10 +31,7 @@ main =
 port newTab : Decode.Value -> Cmd msg
 
 
-port getCaret : () -> Cmd msg
-
-
-port gotCaret : (Decode.Value -> msg) -> Sub msg
+port atCaret : (Decode.Value -> msg) -> Sub msg
 
 
 port setCaret : Decode.Value -> Cmd msg
@@ -126,9 +123,6 @@ update msg mdl =
 
                                 ( AppMsg msg_, AppMdl mdl_ ) ->
                                     case msg_ of
-                                        App.FromU App.GetCaret ->
-                                            ( mdl.mdl0, getCaret () )
-
                                         App.NewTab url ->
                                             ( mdl.mdl0, url |> Encode.string |> newTab )
 
@@ -244,7 +238,7 @@ subscriptions mdl =
     Sub.batch
         [ s0 |> Sub.map Msg0
         , s1 |> Sub.map Msg1
-        , gotCaret (Decode.decodeValue Decode.int >> Result.withDefault 0 >> App.GotCaret >> App.FromS >> AppMsg >> Msg0)
+        , atCaret (Decode.decodeValue Decode.int >> Result.withDefault 0 >> App.AtCaret >> App.FromS >> AppMsg >> Msg0)
         ]
 
 
