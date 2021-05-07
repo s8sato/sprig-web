@@ -115,10 +115,10 @@ type Msg
     = Goto P.Page
     | NoOp
     | Tick Posix
+    | NewTab Url
+    | SetCaret Int
     | FromU FromU
     | FromS FromS
-    | NewTab Url
-    | GotCaret Int
 
 
 type FromU
@@ -130,7 +130,7 @@ type FromU
     | KeyDown Key
     | KeyUp Key
     | Select Tid
-    | SetCaret Int
+    | GetCaret
 
 
 type FromS
@@ -140,6 +140,7 @@ type FromS
     | Execed Bool (U.HttpResult ResExec)
     | Focused Item (U.HttpResult ResFocus)
     | Starred Tid U.HttpResultAny
+    | GotCaret Int
 
 
 update : Msg -> Mdl -> ( Mdl, Cmd Msg )
@@ -158,6 +159,12 @@ update msg mdl =
               }
             , Cmd.none
             )
+
+        NewTab _ ->
+            ( mdl, Cmd.none )
+
+        SetCaret _ ->
+            ( mdl, Cmd.none )
 
         FromU fromU ->
             case fromU of
@@ -260,15 +267,9 @@ update msg mdl =
                                 Enter ->
                                     ( mdl, mdl.keyMod.ctrl |> BX.ifElse (Text mdl.input |> request) Cmd.none )
 
-                                -- TODOX get selectionStart of textarea
+                                -- TODOX get selectionStdart of textarea
                                 Tab ->
-                                    let
-                                        caret =
-                                            mdl.caret
-                                    in
-                                    ( mdl.isInput |> BX.ifElse { mdl | input = mdl.input |> SX.insertAt "    " caret } mdl
-                                    , SetCaret (caret + 4) |> U.cmd FromU
-                                    )
+                                    ( mdl, Cmd.none )
 
                                 ArrowDown ->
                                     ( mdl.keyMod.ctrl |> BX.ifElse { mdl | isInputFS = True } mdl, Cmd.none )
@@ -301,7 +302,7 @@ update msg mdl =
                 Select tid ->
                     ( { mdl | selected = mdl.selected |> (\l -> List.member tid l |> BX.ifElse (LX.remove tid l) (tid :: l)) }, Cmd.none )
 
-                SetCaret _ ->
+                GetCaret ->
                     ( mdl, Cmd.none )
 
         FromS fromS ->
@@ -530,11 +531,10 @@ update msg mdl =
                 Starred _ (Err e) ->
                     handle mdl e
 
-        NewTab _ ->
-            ( mdl, Cmd.none )
-
-        GotCaret i ->
-            ( { mdl | caret = i }, Cmd.none )
+                GotCaret i ->
+                    ( { mdl | input = mdl.input |> SX.insertAt "    " i }
+                    , SetCaret i |> U.cmd identity
+                    )
 
 
 handle : Mdl -> U.HttpError -> ( Mdl, Cmd Msg )
@@ -710,7 +710,7 @@ view mdl =
                     , onBlur InputBlur
                     , placeholder Placeholder.placeholder
                     , spellcheck True
-                    , preventDefaultOn "keydown" (decKey |> Decode.map (\key -> ( NoOp_, key == NonChar Tab )))
+                    , preventDefaultOn "keydown" (decKey |> Decode.map (\key -> ( key == NonChar Tab |> BX.ifElse GetCaret NoOp_, key == NonChar Tab )))
                     ]
                     []
                 ]
