@@ -10,22 +10,21 @@
   <div id="elm"></div>
 </body>
 <script>
-var app = Elm.Main.init({
+let app = Elm.Main.init({
   node: document.getElementById('elm')
 });
 // port Elm->JS newTab: open url in new tab
 app.ports.newTab.subscribe( url => window.open(url, '_blank'));
-// port Elm->JS setCaret: adjust caret position in textarea
-app.ports.setCaret.subscribe( i => {
-  var input = document.getElementById('app__input');
-  input.selectionStart = input.selectionEnd = i;
-});
-// port JS->Elm getCaret: tell caret position in textarea
-document.addEventListener("keydown", function(event) {
-  if (event.key !== "Tab") {
-    var input = document.getElementById('app__input');
-    app.ports.getCaret.send(input.selectionStart);
-  }
+// port Elm->JS indent: insert indent in textarea
+app.ports.indent.subscribe(function() {
+  const indent = '    ';
+  let input = document.getElementById('app__input');
+  const caret = input.selectionStart + indent.length;
+  let value = input.value;
+  const lhs = value.slice(0, input.selectionStart);
+  const rhs = value.slice(input.selectionEnd);
+  input.value = lhs + indent + rhs;
+  input.setSelectionRange(caret, caret);
 });
 </script>
 </html>
