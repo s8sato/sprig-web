@@ -3,6 +3,7 @@ module Page.App.App exposing (..)
 import Bool.Extra as BX
 import Browser.Dom as Dom
 import Browser.Events as Events
+import Config
 import EndPoint as EP
 import Html exposing (..)
 import Html.Attributes exposing (alt, classList, href, placeholder, property, spellcheck, src, target, value)
@@ -122,15 +123,13 @@ type Msg
 
 
 type FromU
-    = NoOp_
-    | Request Req
+    = Request Req
     | Input String
     | InputBlur
     | InputFocus
     | KeyDown Key
     | KeyUp Key
     | Select Tid
-    | Indent
 
 
 type FromS
@@ -140,7 +139,7 @@ type FromS
     | Execed Bool (U.HttpResult ResExec)
     | Focused Item (U.HttpResult ResFocus)
     | Starred Tid U.HttpResultAny
-    | AtCaret Int
+    | TabHere Int
 
 
 update : Msg -> Mdl -> ( Mdl, Cmd Msg )
@@ -168,9 +167,6 @@ update msg mdl =
 
         FromU fromU ->
             case fromU of
-                NoOp_ ->
-                    ( mdl, Cmd.none )
-
                 Request req ->
                     ( mdl, request req )
 
@@ -267,10 +263,6 @@ update msg mdl =
                                 Enter ->
                                     ( mdl, mdl.keyMod.ctrl |> BX.ifElse (Text mdl.input |> request) Cmd.none )
 
-                                -- TODOX get selectionStdart of textarea
-                                Tab ->
-                                    ( mdl, Cmd.none )
-
                                 ArrowDown ->
                                     ( mdl.keyMod.ctrl |> BX.ifElse { mdl | isInputFS = True } mdl, Cmd.none )
 
@@ -301,15 +293,6 @@ update msg mdl =
 
                 Select tid ->
                     ( { mdl | selected = mdl.selected |> (\l -> List.member tid l |> BX.ifElse (LX.remove tid l) (tid :: l)) }, Cmd.none )
-
-                Indent ->
-                    let
-                        caret =
-                            mdl.caret - 1
-                    in
-                    ( { mdl | input = mdl.input |> SX.insertAt "    " caret }
-                    , SetCaret caret |> U.cmd identity
-                    )
 
         FromS fromS ->
             case fromS of
@@ -537,8 +520,29 @@ update msg mdl =
                 Starred _ (Err e) ->
                     handle mdl e
 
-                AtCaret i ->
-                    ( { mdl | caret = i }, Cmd.none )
+                TabHere i ->
+                    mdl.keyMod.shift
+                        |> BX.ifElse
+                            ( { mdl
+                                | input =
+                                    mdl.input
+                                        |> SX.break i
+                                        |> LX.updateAt 0
+                                            (String.lines
+                                                >> LX.unconsLast
+                                                >> MX.unwrap []
+                                                    (\( l, ls ) ->
+                                                        ls ++ (l |> String.dropLeft (String.length Config.tab) |> List.singleton)
+                                                    )
+                                                >> String.join "\n"
+                                            )
+                                        |> String.concat
+                              }
+                            , SetCaret (i - String.length Config.tab) |> U.cmd identity
+                            )
+                            ( { mdl | input = mdl.input |> SX.insertAt Config.tab i }
+                            , SetCaret (i + String.length Config.tab) |> U.cmd identity
+                            )
 
 
 handle : Mdl -> U.HttpError -> ( Mdl, Cmd Msg )
@@ -714,7 +718,6 @@ view mdl =
                     , onBlur InputBlur
                     , placeholder Placeholder.placeholder
                     , spellcheck True
-                    , preventDefaultOn "keydown" (decKey |> Decode.map (\key -> ( key == NonChar Tab |> BX.ifElse Indent NoOp_, key == NonChar Tab )))
                     ]
                     []
                 ]
@@ -988,9 +991,6 @@ decKey =
                             "Enter" ->
                                 NonChar Enter
 
-                            "Tab" ->
-                                NonChar Tab
-
                             "ArrowDown" ->
                                 NonChar ArrowDown
 
@@ -1014,7 +1014,6 @@ type Key
 type NonChar
     = Modifier Modifier
     | Enter
-    | Tab
     | ArrowDown
     | ArrowUp
     | Escape

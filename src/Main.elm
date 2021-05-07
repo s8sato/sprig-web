@@ -31,7 +31,7 @@ main =
 port newTab : Decode.Value -> Cmd msg
 
 
-port atCaret : (Decode.Value -> msg) -> Sub msg
+port tabHere : (Decode.Value -> msg) -> Sub msg
 
 
 port setCaret : Decode.Value -> Cmd msg
@@ -238,7 +238,7 @@ subscriptions mdl =
     Sub.batch
         [ s0 |> Sub.map Msg0
         , s1 |> Sub.map Msg1
-        , atCaret (Decode.decodeValue Decode.int >> Result.withDefault 0 >> App.AtCaret >> App.FromS >> AppMsg >> Msg0)
+        , tabHere (Decode.decodeValue Decode.int >> Result.withDefault 0 >> App.TabHere >> App.FromS >> AppMsg >> Msg0)
         ]
 
 
