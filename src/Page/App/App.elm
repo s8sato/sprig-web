@@ -6,8 +6,8 @@ import Browser.Events as Events
 import EndPoint as EP
 import Html exposing (..)
 import Html.Attributes exposing (alt, classList, href, placeholder, property, spellcheck, src, target, value)
-import Html.Events exposing (onBlur, onClick, onFocus, onInput)
-import Json.Decode as Decode exposing (Decoder, bool, float, int, list, null, nullable, oneOf, string)
+import Html.Events exposing (onBlur, onClick, onFocus, onInput, preventDefaultOn)
+import Json.Decode as Decode exposing (Decoder, bool, decodeValue, float, int, list, null, nullable, oneOf, string)
 import Json.Decode.Extra exposing (datetime)
 import Json.Decode.Pipeline exposing (required, requiredAt)
 import Json.Encode as Encode
@@ -31,6 +31,7 @@ import Util as U
 type alias Mdl =
     { user : User
     , input : String
+    , caret : Int
 
     -- TODO , inputLog : List String
     , msg : String
@@ -86,6 +87,7 @@ init : User -> ( Mdl, Cmd Msg )
 init user =
     ( { user = user
       , input = ""
+      , caret = 0
       , msg = [ "Hello", user.name ] |> String.join " "
       , msgFix = False
       , items = []
@@ -115,17 +117,20 @@ type Msg
     | Tick Posix
     | FromU FromU
     | FromS FromS
-    | NewTab String
+    | NewTab Url
+    | GotCaret Int
 
 
 type FromU
-    = Request Req
+    = NoOp_
+    | Request Req
     | Input String
     | InputBlur
     | InputFocus
     | KeyDown Key
     | KeyUp Key
     | Select Tid
+    | SetCaret Int
 
 
 type FromS
@@ -156,6 +161,9 @@ update msg mdl =
 
         FromU fromU ->
             case fromU of
+                NoOp_ ->
+                    ( mdl, Cmd.none )
+
                 Request req ->
                     ( mdl, request req )
 
@@ -254,7 +262,13 @@ update msg mdl =
 
                                 -- TODOX get selectionStart of textarea
                                 Tab ->
-                                    ( mdl, Cmd.none )
+                                    let
+                                        caret =
+                                            mdl.caret
+                                    in
+                                    ( mdl.isInput |> BX.ifElse { mdl | input = mdl.input |> SX.insertAt "    " caret } mdl
+                                    , SetCaret (caret + 4) |> U.cmd FromU
+                                    )
 
                                 ArrowDown ->
                                     ( mdl.keyMod.ctrl |> BX.ifElse { mdl | isInputFS = True } mdl, Cmd.none )
@@ -286,6 +300,9 @@ update msg mdl =
 
                 Select tid ->
                     ( { mdl | selected = mdl.selected |> (\l -> List.member tid l |> BX.ifElse (LX.remove tid l) (tid :: l)) }, Cmd.none )
+
+                SetCaret _ ->
+                    ( mdl, Cmd.none )
 
         FromS fromS ->
             case fromS of
@@ -516,6 +533,9 @@ update msg mdl =
         NewTab _ ->
             ( mdl, Cmd.none )
 
+        GotCaret i ->
+            ( { mdl | caret = i }, Cmd.none )
+
 
 handle : Mdl -> U.HttpError -> ( Mdl, Cmd Msg )
 handle mdl e =
@@ -690,6 +710,7 @@ view mdl =
                     , onBlur InputBlur
                     , placeholder Placeholder.placeholder
                     , spellcheck True
+                    , preventDefaultOn "keydown" (decKey |> Decode.map (\key -> ( NoOp_, key == NonChar Tab )))
                     ]
                     []
                 ]
@@ -938,8 +959,8 @@ subscriptions : Mdl -> Sub Msg
 subscriptions _ =
     Sub.batch
         [ Time.every 1000 Tick
-        , decKey |> Decode.map (FromU << KeyDown) |> Events.onKeyDown
-        , decKey |> Decode.map (FromU << KeyUp) |> Events.onKeyUp
+        , decKey |> Decode.map (KeyDown >> FromU) |> Events.onKeyDown
+        , decKey |> Decode.map (KeyUp >> FromU) |> Events.onKeyUp
         ]
 
 
@@ -1208,7 +1229,7 @@ decFocus =
 
 
 type alias Item =
-    { id : Int
+    { id : Tid
     , title : String
     , assign : String
     , isArchived : Bool
@@ -1217,9 +1238,13 @@ type alias Item =
     , deadline : Maybe Posix
     , priority : Maybe Float
     , weight : Maybe Float
-    , link : Maybe String
+    , link : Maybe Url
     , schedule : Maybe Schedule
     }
+
+
+type alias Url =
+    String
 
 
 type alias Schedule =

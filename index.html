@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>Main</title>
   <link rel="stylesheet" type="text/css" href="css/style.css">
-  <script src="main.js"></script>
+  <script src="elm.js"></script>
 </head>
 <body>
   <div id="elm"></div>
@@ -13,7 +13,19 @@
 var app = Elm.Main.init({
   node: document.getElementById('elm')
 });
-// open url in new tab
+// port Elm->JS newTab: open url in new tab
 app.ports.newTab.subscribe( url => window.open(url, '_blank'));
+// port Elm->JS setCaret: adjust caret position in textarea
+app.ports.setCaret.subscribe( i => {
+  var input = document.getElementById('app__input');
+  input.selectionStart = input.selectionEnd = i;
+});
+// port JS->Elm getCaret: tell caret position in textarea
+document.addEventListener("keydown", function(event) {
+  if (event.key !== "Tab") {
+    var input = document.getElementById('app__input');
+    app.ports.getCaret.send(input.selectionStart);
+  }
+});
 </script>
 </html>
