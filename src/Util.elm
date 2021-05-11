@@ -466,6 +466,5 @@ scales =
     , Timescale Hour 1
     , Timescale Minute 15
     , Timescale Minute 1
-
-    -- , Timescale Second 1
+    , Timescale Second 1
     ]

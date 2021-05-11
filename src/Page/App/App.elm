@@ -75,7 +75,6 @@ type View
     | Archives
     | Focus_
     | Search
-    | Tutorial
 
 
 type alias KeyMod =
@@ -261,7 +260,10 @@ update msg mdl =
                                     ( { mdl | keyMod = mdl.keyMod |> setKeyMod m True }, Cmd.none )
 
                                 Enter ->
-                                    ( mdl, mdl.keyMod.ctrl |> BX.ifElse (Text mdl.input |> request) Cmd.none )
+                                    mdl.keyMod.ctrl
+                                        |> BX.ifElse
+                                            ( { mdl | isInputFS = False }, Text mdl.input |> request )
+                                            ( mdl, Cmd.none )
 
                                 ArrowDown ->
                                     ( mdl.keyMod.ctrl |> BX.ifElse { mdl | isInputFS = True } mdl, Cmd.none )
@@ -340,6 +342,9 @@ update msg mdl =
                         ResTextC (ResHelp s) ->
                             ( { mdl | input = s }, Cmd.none )
 
+                        ResTextC (ResUser (ResHelpU s)) ->
+                            ( { mdl | input = s }, Cmd.none )
+
                         ResTextC (ResUser (ResInfo_ r)) ->
                             ( { mdl
                                 | msg =
@@ -382,7 +387,7 @@ update msg mdl =
                                                     mdl.user
                                             in
                                             { user | timescale = U.timescale s }
-                                        , msg = "User timescale modified: " ++ s
+                                        , msg = "User default timescale modified: " ++ s
                                         , timescale = U.timescale s
                                       }
                                     , Cmd.none
@@ -396,10 +401,11 @@ update msg mdl =
                                                     (\alc ->
                                                         [ U.int alc.open_h
                                                         , ":"
-                                                        , U.int alc.open_m
+                                                        , U.int alc.open_m |> String.padLeft 2 '0'
                                                         , "-"
-                                                        , U.int alc.hours
-                                                        , "h"
+                                                        , U.int (alc.open_h + alc.hours)
+                                                        , ":"
+                                                        , U.int alc.open_m |> String.padLeft 2 '0'
                                                         ]
                                                             |> String.concat
                                                     )
@@ -420,34 +426,21 @@ update msg mdl =
                             )
                                 |> input0
 
-                        ResTextC (ResSearch_ r) ->
+                        ResTextC (ResSearch (ResHelpS s)) ->
+                            ( { mdl | input = s }, Cmd.none )
+
+                        ResTextC (ResSearch (ResCondition items)) ->
                             ( { mdl
-                                | msg =
-                                    [ (r.items |> List.length |> singularize "hits") ++ ":"
-                                    , -- TODOX actual search condition
-                                      "actual search condition"
-                                    ]
-                                        |> String.join " "
-                                , items = r.items
+                                | msg = items |> List.length |> singularize "search results"
+                                , items = items
                                 , cursor = 0
                                 , view = Search
                               }
-                            , Cmd.none
+                            , inputBlur
                             )
 
-                        ResTextC (ResTutorial_ r) ->
-                            ( { mdl
-                                | msg =
-                                    [ r.items |> List.length |> singularize "materials"
-                                    , "here."
-                                    ]
-                                        |> String.join " "
-                                , items = r.items
-                                , view = Tutorial
-                              }
-                            , Cmd.none
-                            )
-                                |> input0
+                        ResTextC (ResTutorial s) ->
+                            ( { mdl | input = s }, Cmd.none )
 
                         ResTextT_ r ->
                             ( { mdl
@@ -611,7 +604,12 @@ setKeyMod m b mod =
 
 input0 : ( Mdl, Cmd Msg ) -> ( Mdl, Cmd Msg )
 input0 ( mdl, cmd ) =
-    ( { mdl | input = "" }, Cmd.batch [ cmd, U.idBy "app" "input" |> Dom.blur |> Task.attempt (\_ -> NoOp) ] )
+    ( { mdl | input = "" }, Cmd.batch [ cmd, inputBlur ] )
+
+
+inputBlur : Cmd Msg
+inputBlur =
+    U.idBy "app" "input" |> Dom.blur |> Task.attempt (\_ -> NoOp)
 
 
 singularize : String -> Int -> String
@@ -620,8 +618,7 @@ singularize plural i =
     , ( "leaves", "leaf" )
     , ( "roots", "root" )
     , ( "archives", "archive" )
-    , ( "hits", "hit" )
-    , ( "materials", "material" )
+    , ( "search results", "search result" )
     ]
         |> LX.find (\( p, _ ) -> p == plural)
         |> MX.unwrap plural (\( p, s ) -> SX.pluralize s p i)
@@ -783,7 +780,6 @@ asView s =
     , "archives"
     , "focus"
     , "search"
-    , "tutorial"
     ]
         |> List.map ((==) s)
         |> U.overwrite Nothing
@@ -793,7 +789,6 @@ asView s =
              , Archives
              , Focus_
              , Search
-             , Tutorial
              ]
                 |> List.map Just
             )
@@ -949,6 +944,7 @@ dot dotter item =
                     , \t -> List.member (Time.toHour dotter.zone t) [ 0, 6, 12, 18 ]
                     , \t -> List.member (Time.toMinute dotter.zone t) (List.range 0 14)
                     , \t -> List.member (Time.toMinute dotter.zone t) [ 0, 15, 30, 45 ]
+                    , \t -> Time.toSecond dotter.zone t |> (==) 0
                     ]
                 |> LX.find (\( _, scl ) -> scl == dotter.scale)
                 |> MX.unwrap False (\( cnd, _ ) -> dotter.r |> cnd)
@@ -1102,15 +1098,22 @@ type ResText
     | ResTextT_ ResTextT
 
 
+type alias ResTextT =
+    { created : Int
+    , updated : Int
+    }
+
+
 type ResTextC
     = ResHelp String
     | ResUser ResUser
-    | ResSearch_ ResSearch
-    | ResTutorial_ ResTutorial
+    | ResSearch ResSearch
+    | ResTutorial String
 
 
 type ResUser
-    = ResInfo_ ResInfo
+    = ResHelpU String
+    | ResInfo_ ResInfo
     | ResModify ResModify
 
 
@@ -1129,34 +1132,25 @@ type ResModify
     | Allocations (List U.Allocation)
 
 
-type alias ResSearch =
-    { items : List Item
-    }
-
-
-type alias ResTutorial =
-    { items : List Item
-    }
-
-
-type alias ResTextT =
-    { created : Int
-    , updated : Int
-    }
+type ResSearch
+    = ResHelpS String
+    | ResCondition (List Item)
 
 
 decText : Decoder ResText
 decText =
     oneOf
         [ Decode.succeed ResTextC
-            |> required "Command"
+            |> required "Cmd"
                 (oneOf
                     [ Decode.succeed ResHelp
                         |> required "Help" string
                     , Decode.succeed ResUser
                         |> required "User"
                             (oneOf
-                                [ Decode.succeed ResInfo
+                                [ Decode.succeed ResHelpU
+                                    |> required "Help" string
+                                , Decode.succeed ResInfo
                                     |> requiredAt [ "Info", "since" ] datetime
                                     |> requiredAt [ "Info", "executed" ] int
                                     |> requiredAt [ "Info", "tz" ] string
@@ -1179,11 +1173,16 @@ decText =
                                 ]
                             )
                     , Decode.succeed ResSearch
-                        |> requiredAt [ "Search", "tasks" ] (list decItem)
-                        |> Decode.map ResSearch_
+                        |> required "Search"
+                            (oneOf
+                                [ Decode.succeed ResHelpS
+                                    |> required "Help" string
+                                , Decode.succeed ResCondition
+                                    |> required "Condition" (list decItem)
+                                ]
+                            )
                     , Decode.succeed ResTutorial
-                        |> requiredAt [ "Tutorial", "tasks" ] (list decItem)
-                        |> Decode.map ResTutorial_
+                        |> required "Tutorial" string
                     ]
                 )
         , Decode.succeed ResTextT
