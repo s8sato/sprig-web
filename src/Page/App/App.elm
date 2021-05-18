@@ -87,7 +87,7 @@ init isDemo user =
       , input = ""
       , caret = 0
       , msg = [ "Hello", user.name ] |> String.join " "
-      , msgFix = False
+      , msgFix = True
       , items = []
       , selected = []
       , cursor = 0
@@ -111,7 +111,6 @@ init isDemo user =
 type Msg
     = Goto P.Page
     | NoOp
-    | NoDemo
     | Tick Posix
     | NewTab Url
     | SetCaret Int
@@ -146,9 +145,6 @@ update msg mdl =
             ( mdl, Cmd.none )
 
         NoOp ->
-            ( mdl, Cmd.none )
-
-        NoDemo ->
             ( mdl, Cmd.none )
 
         Tick now ->
@@ -300,7 +296,7 @@ update msg mdl =
         FromS fromS ->
             case fromS of
                 LoggedOut (Ok _) ->
-                    ( mdl, Cmd.batch [ U.cmd identity NoDemo, U.cmd Goto P.LP ] )
+                    ( mdl, U.cmd Goto P.LP)
 
                 Homed option (Ok ( _, res )) ->
                     let

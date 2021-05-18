@@ -100,7 +100,3 @@ view mdl =
 subscriptions : Mdl -> Sub Msg
 subscriptions _ =
     Sub.none
-
-
-
--- HELPER

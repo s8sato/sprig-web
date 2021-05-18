@@ -410,21 +410,9 @@ le r l =
     (l |> Time.posixToMillis) <= (r |> Time.posixToMillis)
 
 
-
--- between_ : comparable -> comparable -> comparable -> Bool
--- between_ l r x =
---     (l <= x) && (x < r)
-
-
 between : Time.Posix -> Time.Posix -> Time.Posix -> Bool
 between l r x =
     (l |> le x) && (x |> lt r)
-
-
-
--- intersect_ : ( comparable, comparable ) -> ( comparable, comparable ) -> Bool
--- intersect_ ( l0, r0 ) ( l1, r1 ) =
---     (l0 |> between_ l1 r1) || (l1 |> between_ l0 r0)
 
 
 intersect : ( Time.Posix, Time.Posix ) -> ( Time.Posix, Time.Posix ) -> Bool

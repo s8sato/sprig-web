@@ -110,9 +110,6 @@ update msg mdl =
 
         _ ->
             case msg of
-                Msg0 (AppMsg App.NoDemo) ->
-                    ( { mdl | isDemo = False }, Cmd.none )
-
                 Msg0 msg0 ->
                     let
                         ( m0, c0 ) =
@@ -283,50 +280,58 @@ findGoto msg =
 
 goto : Mdl -> P.Page -> ( Mdl, Cmd Msg )
 goto mdl page =
-    let
-        mdl0 =
-            mdl.mdl0
+    case ( mdl.mdl0, page ) of
+        ( AppMdl _, P.LP ) ->
+            -- logout to cancel demo mode
+            LP.init False
+                |> U.map LPMdl LPMsg
+                |> (\( m0, c0 ) -> ( { mdl | mdl0 = m0, isDemo = False }, c0 |> Cmd.map Msg0 ))
 
-        ( m0, c0 ) =
-            case page of
-                P.LP ->
-                    LP.init mdl.isDemo |> U.map LPMdl LPMsg
+        _ ->
+            let
+                mdl0 =
+                    mdl.mdl0
 
-                P.Invite ->
-                    case mdl0 of
-                        LoginMdl m ->
-                            Invite.init m.forgot_pw m.tz |> U.map InviteMdl InviteMsg
+                ( m0, c0 ) =
+                    case page of
+                        P.LP ->
+                            LP.init mdl.isDemo |> U.map LPMdl LPMsg
 
-                        _ ->
-                            ( mdl0, Cmd.none )
-
-                P.Register ->
-                    case mdl0 of
-                        InviteMdl m ->
-                            Register.init m.forgot_pw m.email |> U.map RegisterMdl RegisterMsg
-
-                        _ ->
-                            ( mdl0, Cmd.none )
-
-                P.Login ->
-                    case mdl0 of
-                        LPMdl m ->
-                            Login.init m.cred |> U.map LoginMdl LoginMsg
-
-                        _ ->
-                            ( mdl0, Cmd.none )
-
-                P.App_ P.App ->
-                    case mdl0 of
-                        LPMdl m ->
-                            case m.user of
-                                Just user ->
-                                    App.init mdl.isDemo user |> U.map AppMdl AppMsg
+                        P.Invite ->
+                            case mdl0 of
+                                LoginMdl m ->
+                                    Invite.init m.forgot_pw m.tz |> U.map InviteMdl InviteMsg
 
                                 _ ->
                                     ( mdl0, Cmd.none )
 
-                        _ ->
-                            ( mdl0, Cmd.none )
-    in
-    ( { mdl | mdl0 = m0 }, c0 |> Cmd.map Msg0 )
+                        P.Register ->
+                            case mdl0 of
+                                InviteMdl m ->
+                                    Register.init m.forgot_pw m.email |> U.map RegisterMdl RegisterMsg
+
+                                _ ->
+                                    ( mdl0, Cmd.none )
+
+                        P.Login ->
+                            case mdl0 of
+                                LPMdl m ->
+                                    Login.init m.cred |> U.map LoginMdl LoginMsg
+
+                                _ ->
+                                    ( mdl0, Cmd.none )
+
+                        P.App_ P.App ->
+                            case mdl0 of
+                                LPMdl m ->
+                                    case m.user of
+                                        Just user ->
+                                            App.init mdl.isDemo user |> U.map AppMdl AppMsg
+
+                                        _ ->
+                                            ( mdl0, Cmd.none )
+
+                                _ ->
+                                    ( mdl0, Cmd.none )
+            in
+            ( { mdl | mdl0 = m0 }, c0 |> Cmd.map Msg0 )

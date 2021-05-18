@@ -18,7 +18,8 @@ import Util as U
 
 
 type alias Mdl =
-    { cred : U.Cred
+    { isDemo : Bool
+    , cred : U.Cred
     , tz : String
     , forgot_pw : Bool
     , msg : String
@@ -27,17 +28,13 @@ type alias Mdl =
 
 init : Maybe U.Cred -> ( Mdl, Cmd Msg )
 init cred =
-    ( { cred = cred |> Maybe.withDefault (U.Cred "" "")
+    ( { isDemo = cred |> MX.isJust
+      , cred = cred |> Maybe.withDefault (U.Cred "" "")
       , tz = ""
       , forgot_pw = False
       , msg = ""
       }
-    , Cmd.batch
-        [ Task.perform SetTz Time.getZoneName
-        , cred
-            |> MX.isJust
-            |> BX.ifElse (Login |> U.cmd FromU) Cmd.none
-        ]
+    , Task.perform SetTz Time.getZoneName
     )
 
 
@@ -80,7 +77,7 @@ update msg mdl =
                         _ ->
                             "UTC"
               }
-            , Cmd.none
+            , mdl.isDemo |> BX.ifElse (Login |> U.cmd FromU) Cmd.none
             )
 
         FromU fromU ->
@@ -161,7 +158,3 @@ view mdl =
 subscriptions : Mdl -> Sub Msg
 subscriptions _ =
     Sub.none
-
-
-
--- HELPER
