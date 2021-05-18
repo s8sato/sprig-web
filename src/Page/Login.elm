@@ -1,10 +1,12 @@
 module Page.Login exposing (..)
 
+import Bool.Extra as BX
 import EndPoint as EP
 import Html exposing (..)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import Json.Encode as Encode
+import Maybe.Extra as MX
 import Page as P
 import Task
 import Time
@@ -16,26 +18,26 @@ import Util as U
 
 
 type alias Mdl =
-    { req : Req
-    , msg : String
-    , forgot_pw : Bool
-    }
-
-
-type alias Req =
-    { email : String
-    , password : String
+    { cred : U.Cred
     , tz : String
+    , forgot_pw : Bool
+    , msg : String
     }
 
 
-init : ( Mdl, Cmd Msg )
-init =
-    ( { req = { email = "", password = "", tz = "" }
-      , msg = ""
+init : Maybe U.Cred -> ( Mdl, Cmd Msg )
+init cred =
+    ( { cred = cred |> Maybe.withDefault (U.Cred "" "")
+      , tz = ""
       , forgot_pw = False
+      , msg = ""
       }
-    , Task.perform SetTz Time.getZoneName
+    , Cmd.batch
+        [ Task.perform SetTz Time.getZoneName
+        , cred
+            |> MX.isJust
+            |> BX.ifElse (Login |> U.cmd FromU) Cmd.none
+        ]
     )
 
 
@@ -69,27 +71,22 @@ update msg mdl =
             ( mdl, Cmd.none )
 
         SetTz zoneName ->
-            let
-                req =
-                    mdl.req
+            ( { mdl
+                | tz =
+                    case zoneName of
+                        Time.Name name ->
+                            name
 
-                newReq =
-                    { req
-                        | tz =
-                            case zoneName of
-                                Time.Name name ->
-                                    name
-
-                                _ ->
-                                    "UTC"
-                    }
-            in
-            ( { mdl | req = newReq }, Cmd.none )
+                        _ ->
+                            "UTC"
+              }
+            , Cmd.none
+            )
 
         FromU fromU ->
             case fromU of
                 Login ->
-                    ( mdl, U.post_ EP.Auth (enc mdl.req) (FromS << LoggedIn) )
+                    ( mdl, U.post_ EP.Auth (enc mdl) (FromS << LoggedIn) )
 
                 NewAccount ->
                     ( { mdl | forgot_pw = False }, U.cmd Goto P.Invite )
@@ -98,40 +95,44 @@ update msg mdl =
                     ( { mdl | forgot_pw = True }, U.cmd Goto P.Invite )
 
                 EditEmail s ->
-                    let
-                        req =
-                            mdl.req
-
-                        newReq =
-                            { req | email = s }
-                    in
-                    ( { mdl | req = newReq }, Cmd.none )
+                    ( { mdl
+                        | cred =
+                            let
+                                cred =
+                                    mdl.cred
+                            in
+                            { cred | email = s }
+                      }
+                    , Cmd.none
+                    )
 
                 EditPassWord s ->
-                    let
-                        req =
-                            mdl.req
-
-                        newReq =
-                            { req | password = s }
-                    in
-                    ( { mdl | req = newReq }, Cmd.none )
+                    ( { mdl
+                        | cred =
+                            let
+                                cred =
+                                    mdl.cred
+                            in
+                            { cred | password = s }
+                      }
+                    , Cmd.none
+                    )
 
         FromS fromS ->
             case fromS of
-                LoggedIn (Err e) ->
-                    ( { mdl | msg = U.strHttpError e }, Cmd.none )
-
                 LoggedIn (Ok _) ->
                     ( mdl, U.cmd Goto P.LP )
 
+                LoggedIn (Err e) ->
+                    ( { mdl | msg = U.strHttpError e }, Cmd.none )
 
-enc : Req -> Encode.Value
-enc req =
+
+enc : Mdl -> Encode.Value
+enc mdl =
     Encode.object
-        [ ( "email", Encode.string req.email )
-        , ( "password", Encode.string req.password )
-        , ( "tz", Encode.string req.tz )
+        [ ( "email", Encode.string mdl.cred.email )
+        , ( "password", Encode.string mdl.cred.password )
+        , ( "tz", Encode.string mdl.tz )
         ]
 
 
@@ -143,8 +144,8 @@ view : Mdl -> Html Msg
 view mdl =
     div [ class "pre-app" ]
         [ h1 [ class "pre-app__title" ] [ text "Login" ]
-        , div [] [ U.input "email" "Email" mdl.req.email EditEmail ]
-        , div [] [ U.input "password" "Password" mdl.req.password EditPassWord ]
+        , div [] [ U.input "email" "Email" mdl.cred.email EditEmail ]
+        , div [] [ U.input "password" "Password" mdl.cred.password EditPassWord ]
         , div [] [ button [ onClick Login ] [ text "Login" ] ]
         , div [] [ button [ onClick NewAccount ] [ text "New Account" ] ]
         , div [] [ button [ onClick ForgotPW ] [ text "Forgot Password" ] ]
@@ -158,7 +159,7 @@ view mdl =
 
 
 subscriptions : Mdl -> Sub Msg
-subscriptions mdl =
+subscriptions _ =
     Sub.none
 
 

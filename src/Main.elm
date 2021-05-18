@@ -1,6 +1,7 @@
 port module Main exposing (..)
 
 import Browser
+import Config
 import Html exposing (..)
 import Json.Decode as Decode
 import Json.Encode as Encode
@@ -44,6 +45,7 @@ port setCaret : Decode.Value -> Cmd msg
 type alias Mdl =
     { mdl0 : Mdl0
     , mdl1 : Mdl1
+    , isDemo : Bool
     }
 
 
@@ -62,13 +64,16 @@ type Mdl1
 init : () -> ( Mdl, Cmd Msg )
 init _ =
     let
+        isDemo =
+            Config.isDemo
+
         ( m0, c0 ) =
-            LP.init |> U.map LPMdl LPMsg
+            LP.init isDemo |> U.map LPMdl LPMsg
 
         ( m1, c1 ) =
             Objet.init |> U.map ObjetMdl ObjetMsg
     in
-    ( Mdl m0 m1
+    ( Mdl m0 m1 isDemo
     , Cmd.batch
         [ c0 |> Cmd.map Msg0
         , c1 |> Cmd.map Msg1
@@ -99,15 +104,18 @@ type Msg1
 
 update : Msg -> Mdl -> ( Mdl, Cmd Msg )
 update msg mdl =
-    case msg of
-        Msg0 msg0 ->
-            let
-                ( m0, c0 ) =
-                    case findGoto msg0 of
-                        Just page ->
-                            goto mdl.mdl0 page
+    case findGoto msg of
+        Just page ->
+            goto mdl page
 
-                        _ ->
+        _ ->
+            case msg of
+                Msg0 (AppMsg App.NoDemo) ->
+                    ( { mdl | isDemo = False }, Cmd.none )
+
+                Msg0 msg0 ->
+                    let
+                        ( m0, c0 ) =
                             case ( msg0, mdl.mdl0 ) of
                                 ( LPMsg msg_, LPMdl mdl_ ) ->
                                     LP.update msg_ mdl_ |> U.map LPMdl LPMsg
@@ -134,17 +142,17 @@ update msg mdl =
 
                                 _ ->
                                     ( mdl.mdl0, Cmd.none )
-            in
-            ( { mdl | mdl0 = m0 }, c0 |> Cmd.map Msg0 )
+                    in
+                    ( { mdl | mdl0 = m0 }, c0 |> Cmd.map Msg0 )
 
-        Msg1 msg1 ->
-            let
-                ( m1, c1 ) =
-                    case ( msg1, mdl.mdl1 ) of
-                        ( ObjetMsg msg_, ObjetMdl mdl_ ) ->
-                            Objet.update msg_ mdl_ |> U.map ObjetMdl ObjetMsg
-            in
-            ( { mdl | mdl1 = m1 }, c1 |> Cmd.map Msg1 )
+                Msg1 msg1 ->
+                    let
+                        ( m1, c1 ) =
+                            case ( msg1, mdl.mdl1 ) of
+                                ( ObjetMsg msg_, ObjetMdl mdl_ ) ->
+                                    Objet.update msg_ mdl_ |> U.map ObjetMdl ObjetMsg
+                    in
+                    ( { mdl | mdl1 = m1 }, c1 |> Cmd.map Msg1 )
 
 
 
@@ -246,57 +254,79 @@ subscriptions mdl =
 -- HELPER
 
 
-findGoto : Msg0 -> Maybe P.Page
-findGoto msg0 =
-    case msg0 of
-        LPMsg (LP.Goto page) ->
-            Just page
+findGoto : Msg -> Maybe P.Page
+findGoto msg =
+    case msg of
+        Msg0 msg0 ->
+            case msg0 of
+                LPMsg (LP.Goto page) ->
+                    Just page
 
-        InviteMsg (Invite.Goto page) ->
-            Just page
+                InviteMsg (Invite.Goto page) ->
+                    Just page
 
-        RegisterMsg (Register.Goto page) ->
-            Just page
+                RegisterMsg (Register.Goto page) ->
+                    Just page
 
-        LoginMsg (Login.Goto page) ->
-            Just page
+                LoginMsg (Login.Goto page) ->
+                    Just page
 
-        AppMsg (App.Goto page) ->
-            Just page
+                AppMsg (App.Goto page) ->
+                    Just page
+
+                _ ->
+                    Nothing
 
         _ ->
             Nothing
 
 
-goto : Mdl0 -> P.Page -> ( Mdl0, Cmd Msg0 )
-goto mdl0 page =
-    case page of
-        P.LP ->
-            LP.init |> U.map LPMdl LPMsg
+goto : Mdl -> P.Page -> ( Mdl, Cmd Msg )
+goto mdl page =
+    let
+        mdl0 =
+            mdl.mdl0
 
-        P.Invite ->
-            case mdl0 of
-                LoginMdl m ->
-                    Invite.init m.forgot_pw |> U.map InviteMdl InviteMsg
+        ( m0, c0 ) =
+            case page of
+                P.LP ->
+                    LP.init mdl.isDemo |> U.map LPMdl LPMsg
 
-                _ ->
-                    ( mdl0, Cmd.none )
+                P.Invite ->
+                    case mdl0 of
+                        LoginMdl m ->
+                            Invite.init m.forgot_pw m.tz |> U.map InviteMdl InviteMsg
 
-        P.Register ->
-            case mdl0 of
-                InviteMdl m ->
-                    Register.init m.req.email m.req.forgot_pw |> U.map RegisterMdl RegisterMsg
+                        _ ->
+                            ( mdl0, Cmd.none )
 
-                _ ->
-                    ( mdl0, Cmd.none )
+                P.Register ->
+                    case mdl0 of
+                        InviteMdl m ->
+                            Register.init m.forgot_pw m.email |> U.map RegisterMdl RegisterMsg
 
-        P.Login ->
-            Login.init |> U.map LoginMdl LoginMsg
+                        _ ->
+                            ( mdl0, Cmd.none )
 
-        P.App_ P.App ->
-            case mdl0 of
-                LPMdl m ->
-                    App.init m.user |> U.map AppMdl AppMsg
+                P.Login ->
+                    case mdl0 of
+                        LPMdl m ->
+                            Login.init m.cred |> U.map LoginMdl LoginMsg
 
-                _ ->
-                    ( mdl0, Cmd.none )
+                        _ ->
+                            ( mdl0, Cmd.none )
+
+                P.App_ P.App ->
+                    case mdl0 of
+                        LPMdl m ->
+                            case m.user of
+                                Just user ->
+                                    App.init mdl.isDemo user |> U.map AppMdl AppMsg
+
+                                _ ->
+                                    ( mdl0, Cmd.none )
+
+                        _ ->
+                            ( mdl0, Cmd.none )
+    in
+    ( { mdl | mdl0 = m0 }, c0 |> Cmd.map Msg0 )

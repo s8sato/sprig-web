@@ -4,8 +4,9 @@ import Dict
 import EndPoint as EP
 import Html exposing (..)
 import Html.Attributes exposing (class)
-import Json.Decode as Decode exposing (Decoder, int, list, string)
+import Json.Decode as Decode exposing (Decoder, list, string)
 import Json.Decode.Pipeline exposing (required)
+import Maybe.Extra as MX
 import Page as P
 import Time
 import TimeZone
@@ -17,48 +18,18 @@ import Util as U
 
 
 type alias Mdl =
-    { user : User
+    { isDemo : Bool
+    , user : Maybe U.AuthedUser
+    , cred : Maybe U.Cred
     , msg : String
     }
 
 
-type alias User =
-    { name : String
-    , zone : Time.Zone
-    , timescale : U.Timescale
-    , allocations : List U.Allocation
-    }
-
-
-type alias Res =
-    { name : String
-    , tz : String
-    , timescale : String
-    , allocations : List U.Allocation
-    }
-
-
-init : ( Mdl, Cmd Msg )
-init =
-    ( { user = { name = "", zone = Time.utc, timescale = U.timescale "D", allocations = [] }
-      , msg = ""
-      }
-    , getMe
+init : Bool -> ( Mdl, Cmd Msg )
+init isDemo =
+    ( Mdl isDemo Nothing Nothing ""
+    , GetMe |> U.cmd identity
     )
-
-
-getMe : Cmd Msg
-getMe =
-    U.get EP.Auth [] (FromS << GotYou) decRes
-
-
-decRes : Decoder Res
-decRes =
-    Decode.succeed Res
-        |> required "name" string
-        |> required "tz" string
-        |> required "timescale" string
-        |> required "allocations" (list U.decAllocation)
 
 
 
@@ -67,11 +38,14 @@ decRes =
 
 type Msg
     = Goto P.Page
+    | GetMe
+    | GetAccount
     | FromS FromS
 
 
 type FromS
-    = GotYou (U.HttpResult Res)
+    = GotYou (U.HttpResult ResGetMe)
+    | GotAccount (U.HttpResult ResGetAccount)
 
 
 update : Msg -> Mdl -> ( Mdl, Cmd Msg )
@@ -80,31 +54,35 @@ update msg mdl =
         Goto _ ->
             ( mdl, Cmd.none )
 
+        GetMe ->
+            ( mdl, U.get EP.Auth [] (FromS << GotYou) decGetMe )
+
+        GetAccount ->
+            ( mdl, U.get EP.Register [] (FromS << GotAccount) decGetAccount )
+
         FromS fromS ->
             case fromS of
+                GotYou (Ok ( _, res )) ->
+                    ( { mdl | user = Just res }, U.cmd Goto (P.App_ P.App) )
+
                 GotYou (Err e) ->
                     case U.errCode e of
+                        -- Unauthorized
                         Just 401 ->
-                            -- Unauthorized
-                            ( mdl, U.cmd Goto P.Login )
+                            if mdl.isDemo then
+                                ( mdl, GetAccount |> U.cmd identity )
+
+                            else
+                                ( mdl, U.cmd Goto P.Login )
 
                         _ ->
                             ( { mdl | msg = U.strHttpError e }, Cmd.none )
 
-                GotYou (Ok ( _, res )) ->
-                    ( { mdl
-                        | user =
-                            { name = res.name
-                            , zone =
-                                Dict.get res.tz TimeZone.zones
-                                    |> Maybe.map (\f -> f ())
-                                    |> Maybe.withDefault Time.utc
-                            , timescale = U.timescale res.timescale
-                            , allocations = res.allocations
-                            }
-                      }
-                    , U.cmd Goto (P.App_ P.App)
-                    )
+                GotAccount (Ok ( _, res )) ->
+                    ( { mdl | cred = Just res }, U.cmd Goto P.Login )
+
+                GotAccount (Err e) ->
+                    ( { mdl | msg = U.strHttpError e }, Cmd.none )
 
 
 
@@ -129,4 +107,35 @@ subscriptions _ =
 
 
 
--- HELPER
+-- INTERFACE
+
+
+type alias ResGetMe =
+    U.AuthedUser
+
+
+decGetMe : Decoder ResGetMe
+decGetMe =
+    Decode.succeed U.AuthedUser
+        |> required "name" string
+        |> required "tz"
+            (string
+                |> Decode.map
+                    (\s ->
+                        Dict.get s TimeZone.zones
+                            |> MX.unwrap Time.utc (\z -> z ())
+                    )
+            )
+        |> required "timescale" (string |> Decode.map U.timescale)
+        |> required "allocations" (list U.decAllocation)
+
+
+type alias ResGetAccount =
+    U.Cred
+
+
+decGetAccount : Decoder ResGetAccount
+decGetAccount =
+    Decode.succeed U.Cred
+        |> required "email" string
+        |> required "password" string

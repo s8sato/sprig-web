@@ -2,10 +2,9 @@ module Util exposing (..)
 
 import Bool.Extra as BX
 import Date
-import Dict
 import EndPoint as EP
 import Html exposing (..)
-import Html.Attributes exposing (classList, for, placeholder, type_, value)
+import Html.Attributes exposing (classList, placeholder, type_, value)
 import Html.Events exposing (onInput)
 import Http
 import Http.Detailed
@@ -468,3 +467,17 @@ scales =
     , Timescale Minute 1
     , Timescale Second 1
     ]
+
+
+type alias AuthedUser =
+    { name : String
+    , zone : Time.Zone
+    , timescale : Timescale
+    , allocations : List Allocation
+    }
+
+
+type alias Cred =
+    { email : String
+    , password : String
+    }

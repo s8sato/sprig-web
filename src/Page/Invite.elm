@@ -7,8 +7,6 @@ import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import Json.Encode as Encode
 import Page as P
-import Task
-import Time
 import Util as U
 
 
@@ -17,25 +15,16 @@ import Util as U
 
 
 type alias Mdl =
-    { req : Req
+    { email : String
+    , forgot_pw : Bool
+    , tz : String
     , msg : String
     }
 
 
-type alias Req =
-    { email : String
-    , forgot_pw : Bool
-    , tz : String
-    }
-
-
-init : Bool -> ( Mdl, Cmd Msg )
-init forgot_pw =
-    ( { req = { email = "", forgot_pw = forgot_pw, tz = "" }
-      , msg = ""
-      }
-    , Task.perform SetTz Time.getZoneName
-    )
+init : Bool -> String -> ( Mdl, Cmd Msg )
+init forgot_pw tz =
+    ( Mdl "" forgot_pw tz "", Cmd.none )
 
 
 
@@ -44,7 +33,6 @@ init forgot_pw =
 
 type Msg
     = Goto P.Page
-    | SetTz Time.ZoneName
     | FromU FromU
     | FromS FromS
 
@@ -64,54 +52,29 @@ update msg mdl =
         Goto _ ->
             ( mdl, Cmd.none )
 
-        SetTz zoneName ->
-            let
-                req =
-                    mdl.req
-
-                newReq =
-                    { req
-                        | tz =
-                            case zoneName of
-                                Time.Name name ->
-                                    name
-
-                                _ ->
-                                    "UTC"
-                    }
-            in
-            ( { mdl | req = newReq }, Cmd.none )
-
         FromU fromU ->
             case fromU of
                 InviteMe ->
-                    ( mdl, U.post_ EP.Invite (enc mdl.req) (FromS << InvitedYou) )
+                    ( mdl, U.post_ EP.Invite (enc mdl) (FromS << InvitedYou) )
 
                 EditEmail s ->
-                    let
-                        req =
-                            mdl.req
-
-                        newReq =
-                            { req | email = s }
-                    in
-                    ( { mdl | req = newReq }, Cmd.none )
+                    ( { mdl | email = s }, Cmd.none )
 
         FromS fromS ->
             case fromS of
-                InvitedYou (Err e) ->
-                    ( { mdl | msg = U.strHttpError e }, Cmd.none )
-
                 InvitedYou (Ok _) ->
                     ( mdl, U.cmd Goto P.Register )
 
+                InvitedYou (Err e) ->
+                    ( { mdl | msg = U.strHttpError e }, Cmd.none )
 
-enc : Req -> Encode.Value
-enc req =
+
+enc : Mdl -> Encode.Value
+enc mdl =
     Encode.object
-        [ ( "email", Encode.string req.email )
-        , ( "forgot_pw", Encode.bool req.forgot_pw )
-        , ( "tz", Encode.string req.tz )
+        [ ( "email", Encode.string mdl.email )
+        , ( "forgot_pw", Encode.bool mdl.forgot_pw )
+        , ( "tz", Encode.string mdl.tz )
         ]
 
 
@@ -122,9 +85,9 @@ enc req =
 view : Mdl -> Html Msg
 view mdl =
     div [ class "pre-app" ]
-        [ h1 [ class "pre-app__title" ] [ mdl.req.forgot_pw |> BX.ifElse "Forgot Password" "Invite" |> text ]
-        , div [] [ U.input "email" "Email" mdl.req.email EditEmail ]
-        , div [] [ button [ onClick InviteMe ] [ mdl.req.forgot_pw |> BX.ifElse "Get Reset Key" "Get Invitation" |> text ] ]
+        [ h1 [ class "pre-app__title" ] [ mdl.forgot_pw |> BX.ifElse "Forgot Password" "Invite" |> text ]
+        , div [] [ U.input "email" "Email" mdl.email EditEmail ]
+        , div [] [ button [ onClick InviteMe ] [ mdl.forgot_pw |> BX.ifElse "Get Reset Key" "Get Invitation" |> text ] ]
         , div [] [ text mdl.msg ]
         ]
         |> Html.map FromU
@@ -135,7 +98,7 @@ view mdl =
 
 
 subscriptions : Mdl -> Sub Msg
-subscriptions mdl =
+subscriptions _ =
     Sub.none
 
 

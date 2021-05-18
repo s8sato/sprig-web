@@ -15,26 +15,17 @@ import Util as U
 
 
 type alias Mdl =
-    { req : Req
+    { key : String
+    , cred : U.Cred
+    , reset_pw : Bool
     , confirmation : String
     , msg : String
     }
 
 
-type alias Req =
-    { key : String
-    , email : String
-    , password : String
-    , reset_pw : Bool
-    }
-
-
-init : String -> Bool -> ( Mdl, Cmd Msg )
-init email reset_pw =
-    ( { req = { key = "", email = email, password = "", reset_pw = reset_pw }
-      , confirmation = ""
-      , msg = ""
-      }
+init : Bool -> String -> ( Mdl, Cmd Msg )
+init reset_pw email =
+    ( Mdl "" (U.Cred email "") reset_pw "" ""
     , Cmd.none
     )
 
@@ -74,38 +65,33 @@ update msg mdl =
                             ( { mdl | msg = fault }, Cmd.none )
 
                         _ ->
-                            ( mdl, U.post_ EP.Register (enc mdl.req) (FromS << RegisteredYou) )
+                            ( mdl, U.post_ EP.Register (enc mdl) (FromS << RegisteredYou) )
 
                 EditKey s ->
-                    let
-                        req =
-                            mdl.req
-
-                        newReq =
-                            { req | key = s }
-                    in
-                    ( { mdl | req = newReq }, Cmd.none )
+                    ( { mdl | key = s }, Cmd.none )
 
                 EditPassWord s ->
-                    let
-                        req =
-                            mdl.req
-
-                        newReq =
-                            { req | password = s }
-                    in
-                    ( { mdl | req = newReq }, Cmd.none )
+                    ( { mdl
+                        | cred =
+                            let
+                                cred =
+                                    mdl.cred
+                            in
+                            { cred | password = s }
+                      }
+                    , Cmd.none
+                    )
 
                 EditConfirmation s ->
                     ( { mdl | confirmation = s }, Cmd.none )
 
         FromS fromS ->
             case fromS of
-                RegisteredYou (Err e) ->
-                    ( { mdl | msg = U.strHttpError e }, Cmd.none )
-
                 RegisteredYou (Ok _) ->
                     ( mdl, U.cmd Goto P.LP )
+
+                RegisteredYou (Err e) ->
+                    ( { mdl | msg = U.strHttpError e }, Cmd.none )
 
 
 faultOf : Mdl -> Maybe String
@@ -114,15 +100,15 @@ faultOf mdl =
         passwordLen =
             8
     in
-    [ mdl.req.password /= mdl.confirmation
-    , String.length mdl.req.password < passwordLen
-    , String.length mdl.req.key /= 36
+    [ mdl.cred.password /= mdl.confirmation
+    , String.length mdl.cred.password < passwordLen
+    , String.length mdl.key /= 36
     ]
         |> U.overwrite Nothing
             ([ "Password does not match confirmation."
              , [ "Password should be at least", U.int passwordLen, "length." ] |> String.join " "
              , [ "Enter the"
-               , mdl.req.reset_pw |> BX.ifElse "reset" "register"
+               , mdl.reset_pw |> BX.ifElse "reset" "register"
                , "key correctly."
                ]
                 |> String.join " "
@@ -131,13 +117,13 @@ faultOf mdl =
             )
 
 
-enc : Req -> Encode.Value
-enc req =
+enc : Mdl -> Encode.Value
+enc mdl =
     Encode.object
-        [ ( "key", Encode.string req.key )
-        , ( "email", Encode.string req.email )
-        , ( "password", Encode.string req.password )
-        , ( "reset_pw", Encode.bool req.reset_pw )
+        [ ( "key", Encode.string mdl.key )
+        , ( "email", Encode.string mdl.cred.email )
+        , ( "password", Encode.string mdl.cred.password )
+        , ( "reset_pw", Encode.bool mdl.reset_pw )
         ]
 
 
@@ -148,11 +134,11 @@ enc req =
 view : Mdl -> Html Msg
 view mdl =
     div [ class "pre-app" ]
-        [ h1 [ class "pre-app__title" ] [ mdl.req.reset_pw |> BX.ifElse "Reset Password" "Register" |> text ]
-        , div [] [ U.input "password" (mdl.req.reset_pw |> BX.ifElse "Reset Key" "Register Key") mdl.req.key EditKey ]
-        , div [] [ U.input "password" "New Password" mdl.req.password EditPassWord ]
+        [ h1 [ class "pre-app__title" ] [ mdl.reset_pw |> BX.ifElse "Reset Password" "Register" |> text ]
+        , div [] [ U.input "password" (mdl.reset_pw |> BX.ifElse "Reset Key" "Register Key") mdl.key EditKey ]
+        , div [] [ U.input "password" "New Password" mdl.cred.password EditPassWord ]
         , div [] [ U.input "password" "Confirmation" mdl.confirmation EditConfirmation ]
-        , div [] [ button [ onClick RegisterMe ] [ mdl.req.reset_pw |> BX.ifElse "Reset Password" "Register" |> text ] ]
+        , div [] [ button [ onClick RegisterMe ] [ mdl.reset_pw |> BX.ifElse "Reset Password" "Register" |> text ] ]
         , div [] [ text mdl.msg ]
         ]
         |> Html.map FromU
@@ -163,7 +149,7 @@ view mdl =
 
 
 subscriptions : Mdl -> Sub Msg
-subscriptions mdl =
+subscriptions _ =
     Sub.none
 
 

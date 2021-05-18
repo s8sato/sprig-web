@@ -7,8 +7,8 @@ import Config
 import EndPoint as EP
 import Html exposing (..)
 import Html.Attributes exposing (alt, classList, href, placeholder, property, spellcheck, src, target, value)
-import Html.Events exposing (onBlur, onClick, onFocus, onInput, preventDefaultOn)
-import Json.Decode as Decode exposing (Decoder, bool, decodeValue, float, int, list, null, nullable, oneOf, string)
+import Html.Events exposing (onBlur, onClick, onFocus, onInput)
+import Json.Decode as Decode exposing (Decoder, bool, float, int, list, null, nullable, oneOf, string)
 import Json.Decode.Extra exposing (datetime)
 import Json.Decode.Pipeline exposing (required, requiredAt)
 import Json.Encode as Encode
@@ -33,8 +33,6 @@ type alias Mdl =
     { user : User
     , input : String
     , caret : Int
-
-    -- TODO , inputLog : List String
     , msg : String
     , msgFix : Bool
     , items : List Item
@@ -83,8 +81,8 @@ type alias KeyMod =
     }
 
 
-init : User -> ( Mdl, Cmd Msg )
-init user =
+init : Bool -> User -> ( Mdl, Cmd Msg )
+init isDemo user =
     ( { user = user
       , input = ""
       , caret = 0
@@ -102,8 +100,7 @@ init user =
       , isInputFS = False
       , keyMod = KeyMod False False
       }
-      --   TODO intro animation
-    , Cmd.none
+    , isDemo |> BX.ifElse (Text "/tutorial") (Home Nothing) |> request
     )
 
 
@@ -114,6 +111,7 @@ init user =
 type Msg
     = Goto P.Page
     | NoOp
+    | NoDemo
     | Tick Posix
     | NewTab Url
     | SetCaret Int
@@ -148,6 +146,9 @@ update msg mdl =
             ( mdl, Cmd.none )
 
         NoOp ->
+            ( mdl, Cmd.none )
+
+        NoDemo ->
             ( mdl, Cmd.none )
 
         Tick now ->
@@ -299,7 +300,7 @@ update msg mdl =
         FromS fromS ->
             case fromS of
                 LoggedOut (Ok _) ->
-                    ( mdl, U.cmd Goto P.LP )
+                    ( mdl, Cmd.batch [ U.cmd identity NoDemo, U.cmd Goto P.LP ] )
 
                 Homed option (Ok ( _, res )) ->
                     let
