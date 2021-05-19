@@ -1,34 +1,37 @@
 <!DOCTYPE HTML>
 <html>
+
 <head>
   <meta charset="UTF-8">
   <title>Main</title>
-  <link rel="stylesheet" type="text/css" href="css/style.css">
+  <link rel="stylesheet" type="text/css" href="style.css">
   <script src="elm.js"></script>
 </head>
+
 <body>
   <div id="elm"></div>
 </body>
 <script>
-let app = Elm.Main.init({
-  node: document.getElementById('elm')
-});
-// port Elm->JS newTab: open url in new tab
-app.ports.newTab.subscribe( url => window.open(url, '_blank'));
-// port JS->Elm tabHere: tell caret position in textarea
-document.addEventListener("keydown", function(event) {
-  if (event.key === "Tab") {
-    event.preventDefault();
-    const input = document.getElementById('app__input');
-    app.ports.tabHere.send(input.selectionStart);
-  }
-});
-// port Elm->JS setCaret: adjust caret position in textarea
-app.ports.setCaret.subscribe(async function (i) {
-  let input = document.getElementById('app__input');
-  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-  await sleep(100);
-  input.setSelectionRange(i, i);
-});
+  let app = Elm.Main.init({
+    node: document.getElementById('elm')
+  });
+  // port Elm->JS newTab: open url in new tab
+  app.ports.newTab.subscribe(url => window.open(url, '_blank'));
+  // port JS->Elm tabHere: tell caret position in textarea
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Tab") {
+      event.preventDefault();
+      const input = document.getElementById('app__input');
+      app.ports.tabHere.send(input.selectionStart);
+    }
+  });
+  // port Elm->JS setCaret: adjust caret position in textarea
+  app.ports.setCaret.subscribe(async function (i) {
+    let input = document.getElementById('app__input');
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    await sleep(100);
+    input.setSelectionRange(i, i);
+  });
 </script>
+
 </html>

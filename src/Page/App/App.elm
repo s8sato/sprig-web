@@ -296,7 +296,7 @@ update msg mdl =
         FromS fromS ->
             case fromS of
                 LoggedOut (Ok _) ->
-                    ( mdl, U.cmd Goto P.LP)
+                    ( mdl, U.cmd Goto P.LP )
 
                 Homed option (Ok ( _, res )) ->
                     let
@@ -658,7 +658,7 @@ itemHeight =
 
 imgDir : String
 imgDir =
-    "../images"
+    "images"
 
 
 view : Mdl -> Html Msg
