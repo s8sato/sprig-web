@@ -13,12 +13,12 @@ jump
     step
         hop
 
-#0      existing item. update other attributes
-*       star
-$24     expected to take 24 hours
-@user   assign to user
-12:-    can be started at 12:00 today
--/6/    should be done by 6/1 of this year
+#0      ID of an existing item to update other attributes.
+*       Star to display at the top.
+12:-    Can be started at 12:00 today.
+-/6/    Should be done by 6/1 of this year.
+$24     Expected to cost 24 hours.
+@user   Assign to user, if you have edit permission.
 
 root
     <!-- comment -->
@@ -27,7 +27,7 @@ root
     branch
         joint] leaf0
 
-write               read
+Write               Read
 2021/06/15T12:30    2021-06-15T12:30
 2021//              2021-01-01T00:00
 /6/                 YYYY-06-01T00:00
@@ -35,7 +35,7 @@ write               read
 //15T12:            YYYY-MM-15T12:00
 12:                 YYYY-MM-DDT12:00
 :30                 YYYY-MM-DDThh:30
-                    YMDh inherits the current time
+                    YMDh inherits the current time.
 
-/       command help
+/       Command help.
 """

@@ -17,7 +17,7 @@ $px__border-radius: univ.$px__border-radius;
 $px__glyph: 40px;
 $px__scroll-width: 16px;
 $width__btn--account: 192px;
-$width__btn--submit: 78px; // golden ratio
+$width__btn--send: 78px; // golden ratio
 $width__sidebar: 64px;
 
 @function image_($str__name) {
@@ -79,8 +79,8 @@ $width__sidebar: 64px;
             overflow: auto;
         }
     }
-    &__submits {
-        @include univ.a-column($width : $width__btn--submit + $margin__in-header);
+    &__sends {
+        @include univ.a-column($width : $width__btn--send + $margin__in-header);
         @include univ.center();
     }
     &__accounts {
@@ -93,8 +93,8 @@ $width__sidebar: 64px;
         @include glyph();
         @include univ.has-image();
 
-        &--submit {
-            @include univ.btn($width__btn--submit, $height__in-header);
+        &--send {
+            @include univ.btn($width__btn--send, $height__in-header);
         }
         &--account {
             @include univ.btn($width__btn--account, $height__in-header);
