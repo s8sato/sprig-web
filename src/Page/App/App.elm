@@ -377,10 +377,10 @@ update msg mdl =
                         ResTextC (ResUser (ResModify m)) ->
                             (case m of
                                 Email s ->
-                                    ( { mdl | msg = "User email modified: " ++ s }, Cmd.none )
+                                    ( { mdl | msg = "Email: " ++ s }, Cmd.none )
 
                                 Password _ ->
-                                    ( { mdl | msg = "User password modified." }, Cmd.none )
+                                    ( { mdl | msg = "Password modified." }, Cmd.none )
 
                                 Name s ->
                                     ( { mdl
@@ -390,7 +390,7 @@ update msg mdl =
                                                     mdl.user
                                             in
                                             { user | name = s }
-                                        , msg = "User name modified: " ++ s
+                                        , msg = "User Name: " ++ s
                                       }
                                     , Cmd.none
                                     )
@@ -403,7 +403,7 @@ update msg mdl =
                                                     mdl.user
                                             in
                                             { user | timescale = U.timescale s }
-                                        , msg = "User default timescale modified: " ++ s
+                                        , msg = "Time Scale: " ++ s
                                         , timescale = U.timescale s
                                       }
                                     , Cmd.none
@@ -418,11 +418,31 @@ update msg mdl =
                                             in
                                             { user | allocations = alcs }
                                         , msg =
-                                            "User time allocations modified: "
+                                            "Time Allocations: "
                                                 ++ (alcs
                                                         |> List.map U.strAllocation
                                                         |> String.join ", "
                                                    )
+                                        , msgFix = True
+                                      }
+                                    , Home Nothing |> request
+                                    )
+
+                                Permission r ->
+                                    ( { mdl
+                                        | msg =
+                                            [ mdl.user.name
+                                            , "<==(permission"
+                                            , case r.permission of
+                                                Just edit ->
+                                                    edit |> BX.ifElse "EDIT" "VIEW"
+
+                                                _ ->
+                                                    "NONE"
+                                            , ")=="
+                                            , r.user
+                                            ]
+                                                |> String.join " "
                                         , msgFix = True
                                       }
                                     , Home Nothing |> request
@@ -1144,6 +1164,13 @@ type ResModify
     | Name String
     | Timescale String
     | Allocations (List U.Allocation)
+    | Permission ResPermission
+
+
+type alias ResPermission =
+    { user : String
+    , permission : Maybe Bool
+    }
 
 
 type ResSearch
@@ -1186,6 +1213,8 @@ decText =
                                                 |> required "Timescale" string
                                             , Decode.succeed Allocations
                                                 |> required "Allocations" (list U.decAllocation)
+                                            , Decode.succeed Permission
+                                                |> required "Permission" decPermission
                                             ]
                                         )
                                 ]
@@ -1217,6 +1246,13 @@ decPermissions =
         |> required "edit_to" (list string)
         |> required "view_from" (list string)
         |> required "edit_from" (list string)
+
+
+decPermission : Decoder ResPermission
+decPermission =
+    Decode.succeed ResPermission
+        |> required "user" string
+        |> required "permission" (nullable bool)
 
 
 
