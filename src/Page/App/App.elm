@@ -227,8 +227,8 @@ update msg mdl =
                                             ( { mdl
                                                 | input = mdl.selected |> clone mdl
                                                 , msg =
-                                                    [ mdl.selected |> List.length |> singularize "items"
-                                                    , "cloned."
+                                                    [ "Cloned"
+                                                    , mdl.selected |> List.length |> U.int
                                                     ]
                                                         |> String.join " "
                                               }
@@ -346,10 +346,7 @@ update msg mdl =
                             let
                                 section =
                                     \s ss ->
-                                        [ s
-                                        , ss |> String.join "\n"
-                                        ]
-                                            |> String.join "\n"
+                                        (s :: ss) |> String.join "\n"
                             in
                             ( { mdl
                                 | input =
@@ -360,13 +357,12 @@ update msg mdl =
                                     , section "## EXECUTED" [ U.int r.executed ]
                                     , section "## TIMEZONE" [ r.tz ]
                                     , section "## ALLOCATIONS" (mdl.user.allocations |> List.map U.strAllocation)
-                                    , section "## PERMISSIONS"
-                                        [ section "VIEW ==>" r.permissions.view_to
-                                        , section "EDIT ==>" r.permissions.edit_to
-                                        , section "<== VIEW" r.permissions.view_from
-                                        , section "<== EDIT" r.permissions.edit_from
-                                        ]
-                                    , section "## PRESS [Ctrl]+[Enter] TO EXIT -->" [ "" ]
+                                    , section "## PERMISSIONS" []
+                                    , section "VIEW ==>" r.permissions.view_to
+                                    , section "EDIT ==>" r.permissions.edit_to
+                                    , section "<== VIEW" r.permissions.view_from
+                                    , section "<== EDIT" r.permissions.edit_from
+                                    , section "## PRESS [Ctrl]+[Enter] TO EXIT -->" []
                                     ]
                                         |> String.join "\n\n"
                                 , isInputFS = True
@@ -391,8 +387,9 @@ update msg mdl =
                                             in
                                             { user | name = s }
                                         , msg = "User Name: " ++ s
+                                        , msgFix = True
                                       }
-                                    , Cmd.none
+                                    , Home Nothing |> request
                                     )
 
                                 Timescale s ->
@@ -432,14 +429,15 @@ update msg mdl =
                                     ( { mdl
                                         | msg =
                                             [ mdl.user.name
-                                            , "<==(permission"
-                                            , case r.permission of
+                                            , "<==(allow"
+                                            , (case r.permission of
                                                 Just edit ->
                                                     edit |> BX.ifElse "EDIT" "VIEW"
 
                                                 _ ->
                                                     "NONE"
-                                            , ")=="
+                                              )
+                                                ++ ")=="
                                             , r.user
                                             ]
                                                 |> String.join " "
@@ -469,10 +467,11 @@ update msg mdl =
                         ResTextT_ r ->
                             ( { mdl
                                 | msg =
-                                    [ r.created |> singularize "items"
-                                    , "created."
-                                    , r.updated |> singularize "items"
-                                    , "updated."
+                                    [ "Created"
+                                    , r.created |> U.int
+                                    , "/"
+                                    , "Updated"
+                                    , r.updated |> U.int
                                     ]
                                         |> String.join " "
                                 , msgFix = True
@@ -484,12 +483,12 @@ update msg mdl =
                 Execed revert (Ok ( _, res )) ->
                     ( { mdl
                         | msg =
-                            [ res.count |> singularize "items"
-                            , revert |> BX.ifElse "reverted" "executed"
+                            [ revert |> BX.ifElse "Reverted" "Executed"
+                            , res.count |> U.int
                             , "("
-                            , U.int res.chain
-                            , "chained"
-                            , ")."
+                            , "Chained"
+                            , res.chain |> U.int
+                            , ")"
                             ]
                                 |> String.join " "
                         , msgFix = True
