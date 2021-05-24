@@ -435,6 +435,19 @@ decAllocation =
         |> required "hours" Decode.int
 
 
+strAllocation : Allocation -> String
+strAllocation alc =
+    [ int alc.open_h
+    , ":"
+    , int alc.open_m |> String.padLeft 2 '0'
+    , "-"
+    , int (alc.open_h + alc.hours)
+    , ":"
+    , int alc.open_m |> String.padLeft 2 '0'
+    ]
+        |> String.concat
+
+
 scale : Int -> Timescale -> Timescale
 scale i ts =
     scales

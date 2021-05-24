@@ -135,7 +135,7 @@ type FromS
     | Execed Bool (U.HttpResult ResExec)
     | Focused Item (U.HttpResult ResFocus)
     | Starred Tid U.HttpResultAny
-    | TabHere Int
+    | IndentHere Int
 
 
 update : Msg -> Mdl -> ( Mdl, Cmd Msg )
@@ -343,17 +343,36 @@ update msg mdl =
                             ( { mdl | input = s }, Cmd.none )
 
                         ResTextC (ResUser (ResInfo_ r)) ->
+                            let
+                                section =
+                                    \s ss ->
+                                        [ s
+                                        , ss |> String.join "\n"
+                                        ]
+                                            |> String.join "\n"
+                            in
                             ( { mdl
-                                | msg =
-                                    [ "Since " ++ U.clock False mdl.user.zone r.since
-                                    , "Executed " ++ U.int r.executed
-                                    , r.tz
+                                | input =
+                                    [ "<!-- USER INFO"
+                                    , section "## NAME" [ mdl.user.name ]
+                                    , section "## EMAIL" [ r.email ]
+                                    , section "## SINCE" [ U.clock False mdl.user.zone r.since ]
+                                    , section "## EXECUTED" [ U.int r.executed ]
+                                    , section "## TIMEZONE" [ r.tz ]
+                                    , section "## ALLOCATIONS" (mdl.user.allocations |> List.map U.strAllocation)
+                                    , section "## PERMISSIONS"
+                                        [ section "VIEW ==>" r.permissions.view_to
+                                        , section "EDIT ==>" r.permissions.edit_to
+                                        , section "<== VIEW" r.permissions.view_from
+                                        , section "<== EDIT" r.permissions.edit_from
+                                        ]
+                                    , section "## PRESS [Ctrl]+[Enter] TO EXIT -->" [ "" ]
                                     ]
-                                        |> String.join ", "
+                                        |> String.join "\n\n"
+                                , isInputFS = True
                               }
                             , Cmd.none
                             )
-                                |> input0
 
                         ResTextC (ResUser (ResModify m)) ->
                             (case m of
@@ -391,23 +410,6 @@ update msg mdl =
                                     )
 
                                 Allocations alcs ->
-                                    let
-                                        s =
-                                            alcs
-                                                |> List.map
-                                                    (\alc ->
-                                                        [ U.int alc.open_h
-                                                        , ":"
-                                                        , U.int alc.open_m |> String.padLeft 2 '0'
-                                                        , "-"
-                                                        , U.int (alc.open_h + alc.hours)
-                                                        , ":"
-                                                        , U.int alc.open_m |> String.padLeft 2 '0'
-                                                        ]
-                                                            |> String.concat
-                                                    )
-                                                |> String.join ", "
-                                    in
                                     ( { mdl
                                         | user =
                                             let
@@ -415,7 +417,12 @@ update msg mdl =
                                                     mdl.user
                                             in
                                             { user | allocations = alcs }
-                                        , msg = "User time allocations modified: " ++ s
+                                        , msg =
+                                            "User time allocations modified: "
+                                                ++ (alcs
+                                                        |> List.map U.strAllocation
+                                                        |> String.join ", "
+                                                   )
                                         , msgFix = True
                                       }
                                     , Home Nothing |> request
@@ -510,7 +517,7 @@ update msg mdl =
                 Starred _ (Err e) ->
                     handle mdl e
 
-                TabHere i ->
+                IndentHere i ->
                     mdl.keyMod.shift
                         |> BX.ifElse
                             ( { mdl
@@ -522,16 +529,16 @@ update msg mdl =
                                                 >> LX.unconsLast
                                                 >> MX.unwrap []
                                                     (\( l, ls ) ->
-                                                        ls ++ (l |> String.dropLeft (String.length Config.tab) |> List.singleton)
+                                                        ls ++ (l |> String.dropLeft (String.length Config.indent) |> List.singleton)
                                                     )
                                                 >> String.join "\n"
                                             )
                                         |> String.concat
                               }
-                            , SetCaret (i - String.length Config.tab) |> U.cmd identity
+                            , SetCaret (i - String.length Config.indent) |> U.cmd identity
                             )
-                            ( { mdl | input = mdl.input |> SX.insertAt Config.tab i }
-                            , SetCaret (i + String.length Config.tab) |> U.cmd identity
+                            ( { mdl | input = mdl.input |> SX.insertAt Config.indent i }
+                            , SetCaret (i + String.length Config.indent) |> U.cmd identity
                             )
 
 
@@ -1115,9 +1122,19 @@ type ResUser
 
 
 type alias ResInfo =
-    { since : Posix
+    { email : String
+    , since : Posix
     , executed : Int
     , tz : String
+    , permissions : ResPermissions
+    }
+
+
+type alias ResPermissions =
+    { view_to : List String
+    , edit_to : List String
+    , view_from : List String
+    , edit_from : List String
     }
 
 
@@ -1147,11 +1164,15 @@ decText =
                             (oneOf
                                 [ Decode.succeed ResHelpU
                                     |> required "Help" string
-                                , Decode.succeed ResInfo
-                                    |> requiredAt [ "Info", "since" ] datetime
-                                    |> requiredAt [ "Info", "executed" ] int
-                                    |> requiredAt [ "Info", "tz" ] string
-                                    |> Decode.map ResInfo_
+                                , Decode.succeed ResInfo_
+                                    |> required "Info"
+                                        (Decode.succeed ResInfo
+                                            |> required "email" string
+                                            |> required "since" datetime
+                                            |> required "executed" int
+                                            |> required "tz" string
+                                            |> required "permissions" decPermissions
+                                        )
                                 , Decode.succeed ResModify
                                     |> required "Modify"
                                         (oneOf
@@ -1187,6 +1208,15 @@ decText =
             |> requiredAt [ "Tasks", "updated" ] int
             |> Decode.map ResTextT_
         ]
+
+
+decPermissions : Decoder ResPermissions
+decPermissions =
+    Decode.succeed ResPermissions
+        |> required "view_to" (list string)
+        |> required "edit_to" (list string)
+        |> required "view_from" (list string)
+        |> required "edit_from" (list string)
 
 
 
