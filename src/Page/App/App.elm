@@ -537,28 +537,36 @@ update msg mdl =
                     handle mdl e
 
                 IndentHere i ->
-                    mdl.keyMod.shift
-                        |> BX.ifElse
-                            ( { mdl
-                                | input =
-                                    mdl.input
-                                        |> SX.break i
-                                        |> LX.updateAt 0
-                                            (String.lines
-                                                >> LX.unconsLast
-                                                >> MX.unwrap []
-                                                    (\( l, ls ) ->
-                                                        ls ++ (l |> String.dropLeft (String.length Config.indent) |> List.singleton)
-                                                    )
-                                                >> String.join "\n"
+                    let
+                        alterLineBy : (String -> String) -> String -> String
+                        alterLineBy f =
+                            SX.break i
+                                >> LX.updateAt 0
+                                    (String.lines
+                                        >> LX.unconsLast
+                                        >> MX.unwrap []
+                                            (\( l, ls ) ->
+                                                ls ++ (f l |> List.singleton)
                                             )
-                                        |> String.concat
-                              }
-                            , SetCaret (i - String.length Config.indent) |> U.cmd identity
-                            )
-                            ( { mdl | input = mdl.input |> SX.insertAt Config.indent i }
-                            , SetCaret (i + String.length Config.indent) |> U.cmd identity
-                            )
+                                        >> String.join "\n"
+                                    )
+                                >> String.concat
+
+                        f_ =
+                            mdl.keyMod.shift
+                                |> BX.ifElse
+                                    (\s -> s |> String.startsWith Config.indent |> BX.ifElse (s |> SX.rightOf Config.indent) s)
+                                    ((++) Config.indent)
+
+                        newInput =
+                            mdl.input |> alterLineBy f_
+
+                        diff =
+                            String.length newInput - String.length mdl.input
+                    in
+                    ( { mdl | input = newInput }
+                    , SetCaret (i + diff) |> U.cmd identity
+                    )
 
 
 handle : Mdl -> U.HttpError -> ( Mdl, Cmd Msg )
