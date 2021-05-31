@@ -571,7 +571,13 @@ update msg mdl =
 
 handle : Mdl -> U.HttpError -> ( Mdl, Cmd Msg )
 handle mdl e =
-    ( { mdl | msg = U.strHttpError e }, Cmd.none )
+    case U.errCode e of
+        -- Unauthorized
+        Just 401 ->
+            ( mdl, U.cmd Goto P.Login )
+
+        _ ->
+            ( { mdl | msg = U.strHttpError e }, Cmd.none )
 
 
 type DU
