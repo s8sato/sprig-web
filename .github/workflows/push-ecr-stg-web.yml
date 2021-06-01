@@ -31,7 +31,7 @@ jobs:
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: sprig
-        IMAGE_TAGS: stg,web,latest,${{ github.sha }}
+        IMAGE_TAGS: stg-web-${{ github.sha }}
         BUILD_EXTRA: --build-arg work_dir=/usr/local/src --target prod
       run: |
         readonly REPO_URI="$ECR_REGISTRY/$ECR_REPOSITORY"
