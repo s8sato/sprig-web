@@ -1,4 +1,13 @@
 module Config exposing (..)
-epBase = "https://localhost:3000/api"
-isDemo = True
-indent = "    "
+
+
+epBase =
+    "https://demo.sprig.work:3000/api"
+
+
+isDemo =
+    True
+
+
+indent =
+    "    "
