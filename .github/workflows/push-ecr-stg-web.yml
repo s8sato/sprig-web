@@ -31,17 +31,10 @@ jobs:
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: sprig
-        IMAGE_TAGS: stg-web-${{ github.sha }}
+        IMAGE_TAG: stg-web-${{ github.sha }}
         BUILD_EXTRA: --build-arg work_dir=/usr/local/src --target prod
       run: |
-        readonly REPO_URI="$ECR_REGISTRY/$ECR_REPOSITORY"
-        readonly TAGS=$(echo "$IMAGE_TAGS" | tr "," "\n")
-        tag_args=""
-        for tag in $TAGS; do
-          tag_args="$tag_args -t $REPO_URI:$tag"
-        done
-        docker build $BUILD_EXTRA $tag_args .
-        for tag in $TAGS; do
-          docker push $REPO_URI:$tag
-          echo "::set-output name=image::$REPO_URI:$tag"
-        done
+        readonly IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        docker build $BUILD_EXTRA -t $IMAGE .
+        docker push $IMAGE
+        echo "::set-output name=image::$IMAGE"

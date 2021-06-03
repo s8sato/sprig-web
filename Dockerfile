@@ -17,4 +17,5 @@ CMD elm reactor
 
 FROM nginx:alpine as prod
 ARG work_dir
-COPY --from=build ${work_dir}/images ${work_dir}/elm.js ${work_dir}/favicon.ico ${work_dir}/index.html ${work_dir}/style.css /usr/share/nginx/html/
+COPY --from=build ${work_dir}/images/ /usr/share/nginx/html/images/
+COPY --from=build ${work_dir}/elm.js ${work_dir}/favicon.ico ${work_dir}/index.html ${work_dir}/style.css /usr/share/nginx/html/
