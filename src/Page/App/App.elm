@@ -46,6 +46,9 @@ type alias Mdl =
     , isInput : Bool
     , isInputFS : Bool
     , keyMod : KeyMod
+    , isDeleting : Bool
+    , deleting : List Tid
+    , token : Maybe String
     }
 
 
@@ -99,6 +102,9 @@ init isDemo user =
       , isInput = False
       , isInputFS = False
       , keyMod = KeyMod False False
+      , isDeleting = False
+      , deleting = []
+      , token = Nothing
       }
     , isDemo |> BX.ifElse (Text "/tutorial") (Home Nothing) |> request
     )
@@ -133,6 +139,7 @@ type FromS
     | Homed (Maybe String) (U.HttpResult ResHome)
     | Texted (U.HttpResult ResText)
     | Execed Bool (U.HttpResult ResExec)
+    | Deleted (List Tid) (U.HttpResult ResDelete)
     | Focused Item (U.HttpResult ResFocus)
     | Starred Tid U.HttpResultAny
     | IndentHere Int
@@ -176,11 +183,28 @@ update msg mdl =
                     ( { mdl | isInput = True }, Cmd.none )
 
                 KeyDown key ->
-                    case key of
-                        Char c ->
-                            mdl.isInput
-                                |> BX.ifElse ( mdl, Cmd.none )
-                                    (case c of
+                    if mdl.isDeleting then
+                        let
+                            cleared =
+                                { mdl | isDeleting = False, deleting = [], token = Nothing }
+                        in
+                        case key of
+                            Char 'y' ->
+                                ( cleared
+                                , Delete { tids = mdl.deleting, token = mdl.token } |> request
+                                )
+
+                            _ ->
+                                ( { cleared | msg = "Deletion cancelled." }, Cmd.none )
+
+                    else
+                        case key of
+                            Char c ->
+                                if mdl.isInput then
+                                    ( mdl, Cmd.none )
+
+                                else
+                                    case c of
                                         '/' ->
                                             ( mdl, U.idBy "app" "input" |> Dom.focus |> Task.attempt (\_ -> NoOp) )
 
@@ -235,6 +259,9 @@ update msg mdl =
                                             , U.idBy "app" "input" |> Dom.focus |> Task.attempt (\_ -> NoOp)
                                             )
 
+                                        'd' ->
+                                            ( mdl, Delete { tids = mdl.selected, token = Nothing } |> request )
+
                                         'a' ->
                                             ( mdl, Home (Just "archives") |> request )
 
@@ -249,30 +276,29 @@ update msg mdl =
 
                                         _ ->
                                             ( mdl, Cmd.none )
-                                    )
 
-                        NonChar nc ->
-                            case nc of
-                                Modifier m ->
-                                    ( { mdl | keyMod = mdl.keyMod |> setKeyMod m True }, Cmd.none )
+                            NonChar nc ->
+                                case nc of
+                                    Modifier m ->
+                                        ( { mdl | keyMod = mdl.keyMod |> setKeyMod m True }, Cmd.none )
 
-                                Enter ->
-                                    mdl.keyMod.ctrl
-                                        |> BX.ifElse
-                                            ( { mdl | isInputFS = False }, Text mdl.input |> request )
-                                            ( mdl, Cmd.none )
+                                    Enter ->
+                                        mdl.keyMod.ctrl
+                                            |> BX.ifElse
+                                                ( { mdl | isInputFS = False }, Text mdl.input |> request )
+                                                ( mdl, Cmd.none )
 
-                                ArrowDown ->
-                                    ( mdl.keyMod.ctrl |> BX.ifElse { mdl | isInputFS = True } mdl, Cmd.none )
+                                    ArrowDown ->
+                                        ( mdl.keyMod.ctrl |> BX.ifElse { mdl | isInputFS = True } mdl, Cmd.none )
 
-                                ArrowUp ->
-                                    ( mdl.keyMod.ctrl |> BX.ifElse { mdl | isInputFS = False } mdl, Cmd.none )
+                                    ArrowUp ->
+                                        ( mdl.keyMod.ctrl |> BX.ifElse { mdl | isInputFS = False } mdl, Cmd.none )
 
-                                Escape ->
-                                    ( mdl, U.idBy "app" "input" |> Dom.blur |> Task.attempt (\_ -> NoOp) )
+                                    Escape ->
+                                        ( mdl, U.idBy "app" "input" |> Dom.blur |> Task.attempt (\_ -> NoOp) )
 
-                        AnyKey ->
-                            ( mdl, Cmd.none )
+                            AnyKey ->
+                                ( mdl, Cmd.none )
 
                 KeyUp key ->
                     case key of
@@ -455,6 +481,7 @@ update msg mdl =
                             ( { mdl
                                 | msg = items |> List.length |> singularize "search results"
                                 , items = items
+                                , selected = []
                                 , cursor = 0
                                 , view = Search
                               }
@@ -497,6 +524,40 @@ update msg mdl =
                     , Home Nothing |> request
                     )
 
+                Deleted tids (Ok ( meta, res )) ->
+                    case meta.statusCode of
+                        202 ->
+                            ( { mdl
+                                | msg =
+                                    [ "Deleting"
+                                    , (tids |> List.length |> singularize "items") ++ "."
+                                    , "Are you sure?"
+                                    , "y/N"
+                                    ]
+                                        |> String.join " "
+                                , isDeleting = True
+                                , deleting = tids
+                                , token = res
+                              }
+                            , Cmd.none
+                            )
+
+                        200 ->
+                            ( { mdl
+                                | msg =
+                                    [ "Deleted"
+                                    , tids |> List.length |> U.int
+                                    ]
+                                        |> String.join " "
+                                , msgFix = True
+                                , cursor = 0
+                              }
+                            , Home Nothing |> request
+                            )
+
+                        _ ->
+                            ( mdl, Cmd.none )
+
                 Focused item (Ok ( _, res )) ->
                     ( { mdl
                         | msg =
@@ -528,6 +589,9 @@ update msg mdl =
                     handle mdl e
 
                 Execed _ (Err e) ->
+                    handle mdl e
+
+                Deleted _ (Err e) ->
                     handle mdl e
 
                 Focused _ (Err e) ->
@@ -574,7 +638,7 @@ handle mdl e =
     case U.errCode e of
         -- Unauthorized
         Just 401 ->
-            ( mdl, U.cmd Goto P.Login )
+            ( mdl, request Logout )
 
         _ ->
             ( { mdl | msg = U.strHttpError e }, Cmd.none )
@@ -806,7 +870,8 @@ view mdl =
             ]
         , footer [ bem "footer" [] ] []
         ]
-        |> Html.map FromU
+        -- disable click while deleting
+        |> Html.map (mdl.isDeleting |> BX.ifElse (\_ -> NoOp) FromU)
 
 
 asView : String -> Maybe View
@@ -1066,6 +1131,7 @@ type Req
     | Home (Maybe String)
     | Text String
     | Exec { tids : List Tid, revert : Bool }
+    | Delete { tids : List Tid, token : Maybe String }
     | Focus Item
     | Star Tid
 
@@ -1105,6 +1171,16 @@ request req =
                         ]
             in
             U.put (EP.Tasks |> EP.App_) json (FromS << Execed revert) decExec
+
+        Delete { tids, token } ->
+            let
+                json =
+                    Encode.object
+                        [ ( "tasks", Encode.list Encode.int tids )
+                        , ( "token", token |> MX.unwrap Encode.null Encode.string )
+                        ]
+            in
+            U.delete (EP.Tasks |> EP.App_) json (FromS << Deleted tids) decDelete
 
         Focus item ->
             U.get (EP.Task item.id |> EP.App_) [] (FromS << Focused item) decFocus
@@ -1283,6 +1359,19 @@ decExec =
     Decode.succeed ResExec
         |> required "count" int
         |> required "chain" int
+
+
+
+-- request exec
+
+
+type alias ResDelete =
+    Maybe String
+
+
+decDelete : Decoder ResDelete
+decDelete =
+    Decode.field "token" (nullable string)
 
 
 
